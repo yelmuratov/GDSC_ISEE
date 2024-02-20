@@ -8,6 +8,7 @@ import 'package:flutter_tts/flutter_tts.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
+import 'package:audioplayers/audioplayers.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
@@ -150,46 +151,52 @@ class _TakePhotoScreenState extends State<TakePhotoScreen> {
   }
 
   Future<void> _sendImageToAPI(File imageFile, String lang) async {
-    try {
-      var uri = Uri.parse(
-          'http://44.204.66.45/generate_image_description/?lang=$lang');
-      var request = http.MultipartRequest('POST', uri);
+  try {
+    var uri = Uri.parse(
+        'http://44.204.66.45/generate_image_description/?lang=$lang');
+    var request = http.MultipartRequest('POST', uri);
 
-      // Attach the image file to the request
-      var fileStream = http.ByteStream(imageFile.openRead());
-      var length = await imageFile.length();
-      var multipartFile = http.MultipartFile(
-        'file',
-        fileStream,
-        length,
-        filename: imageFile.path.split('/').last,
-      );
-      request.files.add(multipartFile);
+    // Attach the image file to the request
+    var fileStream = http.ByteStream(imageFile.openRead());
+    var length = await imageFile.length();
+    var multipartFile = http.MultipartFile(
+      'file',
+      fileStream,
+      length,
+      filename: imageFile.path.split('/').last,
+    );
+    request.files.add(multipartFile);
 
-      // Send the request
-      var response = await request.send();
+    // Send the request
+    var response = await request.send();
 
-      // Handle response
-      if (response.statusCode == 200) {
-        // Successful API call
-        final description = await response.stream.bytesToString();
-        print('Image successfully sent to API.');
-        print('API Response: $description');
+    // Handle response
+    if (response.statusCode == 200) {
+      // Successful API call
+      final respStr = await response.stream.bytesToString();
+      final jsonResponse = json.decode(respStr);
+      final description = jsonResponse['iSee']; // Extracting the iSee value
+      print('Image successfully sent to API.');
+      print('API Response: $description');
 
-        // Speak the description
+      // Speak the description
+      if(lang != 'uz'){
         await _speakDescription(description, lang);
-      } else {
-        // Error in API call
-        print(
-            'Failed to send image to API. Status code: ${response.statusCode}');
-        final errorResponse = await response.stream.bytesToString();
-        print('Error response: $errorResponse');
+      }else{
+        _convertTextToAudio("aysii"+description);
       }
-    } catch (e) {
-      // Catch any exceptions
-      print('Error: $e');
+    } else {
+      // Error in API call
+      print(
+          'Failed to send image to API. Status code: ${response.statusCode}');
+      final errorResponse = await response.stream.bytesToString();
+      print('Error response: $errorResponse');
     }
+  } catch (e) {
+    // Catch any exceptions
+    print('Error: $e');
   }
+}
 
   Future<void> _speakDescription(String description, String lang) async {
     try {
@@ -197,43 +204,39 @@ class _TakePhotoScreenState extends State<TakePhotoScreen> {
       await flutterTts.setLanguage(lang);
 
       // Speak the description
-      await flutterTts.speak(description);
+      await flutterTts.speak(lang=='en'?"i see":"айсии" + description);
       // Convert text to audio in Uzbek language
-      if (lang == 'uz') {
-        await _convertTextToAudio(description);
-      }
     } catch (e) {
       print('Error in TTS: $e');
     }
   }
 
+  final AudioPlayer _audioPlayer = AudioPlayer();
   Future<void> _convertTextToAudio(String text) async {
+    var url = "https://mohir.ai/api/v1/tts";
+    var headers = {
+      "Authorization": "6bdcaf97-b043-42da-a989-895154595a4c:437ccdbd-4cc6-4cf9-b4e6-0fc7274e30e3",
+      "Content-Type": "application/json",
+    };
+
+    var data = jsonEncode({
+      "text": text,
+      "model": "davron",
+      "mood": "neutral",
+      "blocking": "true",
+      "webhook_notification_url": "",
+    });
+
     try {
-      var url = "https://mohir.ai/api/v1/tts";
-      var headers = {
-        "Authorization":
-            "6bdcaf97-b043-42da-a989-895154595a4c:437ccdbd-4cc6-4cf9-b4e6-0fc7274e30e3",
-        "Content-Type": "application/json",
-      };
-
-      var data = {
-        "text": text,
-        "model": "davron",
-        "mood": "neutral",
-        "blocking": "true",
-        "webhook_notification_url": "",
-      };
-
-      var response = await http.post(Uri.parse(url),
-          headers: headers, body: json.encode(data));
-
+      var response = await http.post(Uri.parse(url), headers: headers, body: data);
       if (response.statusCode == 200) {
         print('Text converted to audio successfully.');
-        // Play the audio (implement your audio player logic)
+        // Assuming the API returns a direct link to the audio file
+        var jsonResponse = json.decode(response.body);
+        var audioUrl = jsonResponse['result']['url']; // Replace 'audioUrl' with the actual key
+        await _audioPlayer.play(UrlSource(audioUrl));
       } else {
-        print(
-            'Failed to convert text to audio. Status code: ${response.statusCode}');
-        print('Error response: ${response.body}');
+        print('Failed to convert text to audio. Status code: ${response.statusCode}');
       }
     } catch (e) {
       print('Error converting text to audio: $e');
@@ -287,7 +290,7 @@ class _TakePhotoScreenState extends State<TakePhotoScreen> {
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 Container(
-                  color: Colors.blue,
+                  color: Colors.red,
                   width: MediaQuery.of(context).size.width / 2,
                   height: double.infinity,
                   child: IconButton(
@@ -303,7 +306,7 @@ class _TakePhotoScreenState extends State<TakePhotoScreen> {
                 ),
                 Container(
                   color: _isCameraReady && !_isSendingImage
-                      ? Colors.red
+                      ? Colors.green
                       : Colors.grey,
                   width: MediaQuery.of(context).size.width / 2,
                   height: double.infinity,
@@ -358,7 +361,7 @@ class _TakePhotoScreenState extends State<TakePhotoScreen> {
 class DisplayImageScreen extends StatelessWidget {
   final File imageFile;
 
-  const DisplayImageScreen({Key? key, required this.imageFile})
+  DisplayImageScreen({Key? key, required this.imageFile})
       : super(key: key);
 
   // Method to stop speaking
