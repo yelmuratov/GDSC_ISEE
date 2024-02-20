@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-
+import 'package:share/share.dart';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter_tts/flutter_tts.dart';
@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:audioplayers/audioplayers.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -138,7 +139,7 @@ class _TakePhotoScreenState extends State<TakePhotoScreen> {
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (context) => DisplayImageScreen(imageFile: _imageFile!),
+          builder: (context) => DisplayImageScreen(imageFile: _imageFile!, description: '',),
         ),
       );
     } catch (e) {
@@ -355,60 +356,152 @@ class _TakePhotoScreenState extends State<TakePhotoScreen> {
   }
 }
 
-class DisplayImageScreen extends StatelessWidget {
+class DisplayImageScreen extends StatefulWidget {
   final File imageFile;
+  final String description;
 
-  const DisplayImageScreen({Key? key, required this.imageFile})
-      : super(key: key);
+  const DisplayImageScreen({Key? key, required this.imageFile, required this.description}) : super(key: key);
 
-  // Method to stop speaking
-  Future<void> _stopSpeaking() async {
-    final FlutterTts flutterTts = FlutterTts();
-    await flutterTts.stop();
+  @override
+  _DisplayImageScreenState createState() => _DisplayImageScreenState();
+}
+
+class _DisplayImageScreenState extends State<DisplayImageScreen> {
+  final TextEditingController _textEditingController = TextEditingController();
+  final List<Message> messages = [];
+  bool _isTyping = false; // Define the _isTyping variable here
+  final AudioPlayer audioPlayer = AudioPlayer();
+
+  @override
+  void initState() {
+    super.initState();
+    messages.add(Message(text: widget.description, isOutgoing: false)); // Add image description to messages
+    _textEditingController.addListener(() {
+      setState(() {
+        _isTyping = _textEditingController.text.isNotEmpty; // Update _isTyping based on text field
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _textEditingController.dispose();
+    audioPlayer.dispose();
+    super.dispose();
+  }
+
+  void _copyToClipboard(String text) {
+    Clipboard.setData(ClipboardData(text: text));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text('Message copied to clipboard'),
+    ));
   }
 
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final screenHeight = MediaQuery.of(context).size.height;
-    final appBarHeight = screenHeight * 0.05; // 10% of screen height
-    final imageHeight = screenHeight * 0.50; // 50% of screen height
-    final chatHeight = screenHeight * 0.45;
-
     return Scaffold(
-      appBar: PreferredSize(
-        preferredSize: Size.fromHeight(appBarHeight),
-        child: AppBar(
-          title: Text('Taken Image'),
-          leading: IconButton(
-            icon: Icon(Icons.exit_to_app),
-            onPressed: () {
-              _stopSpeaking(); // Stop speaking when exit icon is pressed
-              Navigator.pop(context); // Navigate back when exit icon is pressed
-            },
+      backgroundColor: Color(0x0D1739), // Set the background color to blue
+      appBar: AppBar(
+        title: Text('Display and Share Image'),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.share),
+            onPressed: () => Share.shareFiles([widget.imageFile.path], text: 'Check out this image!'),
           ),
-        ),
+        ],
       ),
       body: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(
-            width: screenWidth, // Set width to screen width
-            height: imageHeight,
-            decoration: BoxDecoration(
-              image: DecorationImage(
-                image: FileImage(imageFile),
-                fit: BoxFit.cover,
-              ),
+          Expanded(
+            child: Image.file(
+              widget.imageFile,
+              width: MediaQuery.of(context).size.width,
+              fit: BoxFit.cover,
+            ),
+          ),
+          Expanded(
+            child: ListView.builder(
+              itemCount: messages.length,
+              itemBuilder: (context, index) {
+                final message = messages[index];
+                return Row(
+                  mainAxisAlignment: message.isOutgoing ? MainAxisAlignment.end : MainAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: EdgeInsets.symmetric(vertical: 10, horizontal: 15),
+                      margin: EdgeInsets.symmetric(vertical: 5, horizontal: 8),
+                      decoration: BoxDecoration(
+                        color: message.isOutgoing ? Colors.blue[300] : Colors.blue[700],
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        message.text,
+                        style: TextStyle(color: Colors.white),
+                      ),
+                    ),
+                    if (!message.isOutgoing)
+                      IconButton(
+                        icon: Icon(Icons.copy, size: 20, color: Colors.white),
+                        onPressed: () => _copyToClipboard(message.text),
+                      ),
+                  ],
+                );
+              },
             ),
           ),
           Container(
-            width: screenWidth, // Set width to screen width
-            height: screenHeight * .40,
-            color: Colors.red, // Set background color here
+            padding: EdgeInsets.only(bottom: 8, left: 8, right: 8),
+            color: Color(0xFF1C2031), // Bottom container color
+            child: Row(
+              children: [
+                IconButton(
+                  icon: Icon(Icons.camera_alt, color: Colors.white),
+                  onPressed: () {
+                    // Placeholder for take picture functionality
+                  },
+                ),
+                Expanded(
+                  child: Container(
+                    padding: EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: Color(0xFF262A34), // Input field color
+                      borderRadius: BorderRadius.circular(30),
+                    ),
+                    child: TextField(
+                      controller: _textEditingController,
+                      style: TextStyle(color: Colors.white),
+                      decoration: InputDecoration(
+                        hintText: 'Type your message here...',
+                        hintStyle: TextStyle(color: Colors.white54),
+                        border: InputBorder.none,
+                      ),
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: Icon(_isTyping ? Icons.send : Icons.keyboard_voice, color: Colors.white),
+                  onPressed: _isTyping ? () {
+                    setState(() {
+                      messages.add(Message(text: _textEditingController.text, isOutgoing: true));
+                      _textEditingController.clear();
+                    });
+                  } : () {
+                    // Placeholder for voice message functionality
+                  },
+                ),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
 }
+
+class Message {
+  String text;
+  bool isOutgoing;
+  Message({required this.text, required this.isOutgoing});
+}
+
+
