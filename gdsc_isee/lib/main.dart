@@ -360,7 +360,8 @@ class DisplayImageScreen extends StatefulWidget {
   final File imageFile;
   final String description;
 
-  const DisplayImageScreen({Key? key, required this.imageFile, required this.description}) : super(key: key);
+  const DisplayImageScreen({Key? key, required this.imageFile, required this.description})
+      : super(key: key);
 
   @override
   _DisplayImageScreenState createState() => _DisplayImageScreenState();
@@ -369,16 +370,16 @@ class DisplayImageScreen extends StatefulWidget {
 class _DisplayImageScreenState extends State<DisplayImageScreen> {
   final TextEditingController _textEditingController = TextEditingController();
   final List<Message> messages = [];
-  bool _isTyping = false; // Define the _isTyping variable here
+  bool _isTyping = false;
   final AudioPlayer audioPlayer = AudioPlayer();
 
   @override
   void initState() {
     super.initState();
-    messages.add(Message(text: widget.description, isOutgoing: false)); // Add image description to messages
+    messages.add(Message(text: widget.description, isOutgoing: false));
     _textEditingController.addListener(() {
       setState(() {
-        _isTyping = _textEditingController.text.isNotEmpty; // Update _isTyping based on text field
+        _isTyping = _textEditingController.text.isNotEmpty;
       });
     });
   }
@@ -400,7 +401,7 @@ class _DisplayImageScreenState extends State<DisplayImageScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Color(0x0D1739), // Set the background color to blue
+      backgroundColor: Color(0xFF0D1739), // Set the background color to blue
       appBar: AppBar(
         title: Text('Display and Share Image'),
         actions: [
@@ -424,27 +425,32 @@ class _DisplayImageScreenState extends State<DisplayImageScreen> {
               itemCount: messages.length,
               itemBuilder: (context, index) {
                 final message = messages[index];
-                return Row(
-                  mainAxisAlignment: message.isOutgoing ? MainAxisAlignment.end : MainAxisAlignment.start,
-                  children: [
-                    Container(
-                      padding: EdgeInsets.symmetric(vertical: 10, horizontal: 15),
-                      margin: EdgeInsets.symmetric(vertical: 5, horizontal: 8),
-                      decoration: BoxDecoration(
-                        color: message.isOutgoing ? Colors.blue[300] : Colors.blue[700],
-                        borderRadius: BorderRadius.circular(20),
+                return Align(
+                  alignment: message.isOutgoing ? Alignment.centerRight : Alignment.centerLeft,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(
+                        child: Container(
+                          padding: EdgeInsets.symmetric(vertical: 10, horizontal: 15),
+                          margin: EdgeInsets.symmetric(vertical: 5, horizontal: 8),
+                          decoration: BoxDecoration(
+                            color: message.isOutgoing ? Colors.lightBlueAccent : Colors.white,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            message.text,
+                            style: TextStyle(color: Colors.black87),
+                          ),
+                        ),
                       ),
-                      child: Text(
-                        message.text,
-                        style: TextStyle(color: Colors.white),
-                      ),
-                    ),
-                    if (!message.isOutgoing)
-                      IconButton(
-                        icon: Icon(Icons.copy, size: 20, color: Colors.white),
-                        onPressed: () => _copyToClipboard(message.text),
-                      ),
-                  ],
+                      if (!message.isOutgoing) // Copy icon for incoming messages
+                        IconButton(
+                          icon: Icon(Icons.copy, color: Colors.white),
+                          onPressed: () => _copyToClipboard(message.text),
+                        ),
+                    ],
+                  ),
                 );
               },
             ),
