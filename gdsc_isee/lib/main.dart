@@ -1,17 +1,21 @@
+// ignore_for_file: avoid_print
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'package:share/share.dart';
+
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:flutter/services.dart';
+import 'package:share/share.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'package:audioplayers/audioplayers.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:audioplayers/audioplayers.dart';
+import 'package:speech_to_text/speech_recognition_result.dart';
+import 'package:speech_to_text/speech_to_text.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -133,16 +137,19 @@ class _TakePhotoScreenState extends State<TakePhotoScreen> {
 
       // Send the image to the API if it's not null
       if (_imageFile != null) {
-        await _sendImageToAPI(_imageFile!, _selectedLanguage);
-      }
+        final description = await _sendImageToAPI(_imageFile!, _selectedLanguage);
 
-      // Navigate to the new page to display the taken image
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => DisplayImageScreen(imageFile: _imageFile!, description: '',),
-        ),
-      );
+        // Navigate to the new page to display the taken image with the description
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => DisplayImageScreen(
+              imageFile: _imageFile!,
+              imageDescription: description, // Pass imageDescription here
+            ),
+          ),
+        );
+      }
     } catch (e) {
       print('Error taking photo: $e');
       setState(() {
@@ -151,72 +158,72 @@ class _TakePhotoScreenState extends State<TakePhotoScreen> {
     }
   }
 
-  Future<void> _sendImageToAPI(File imageFile, String lang) async {
-  try {
-    var uri = Uri.parse(
-        'http://44.204.66.45/generate_image_description/?lang=$lang');
-    var request = http.MultipartRequest('POST', uri);
+  Future<String> _sendImageToAPI(File imageFile, String lang) async {
+    try {
+      var uri = Uri.parse('http://44.204.66.45/generate_image_description/?lang=$lang');
+      var request = http.MultipartRequest('POST', uri);
 
-    // Attach the image file to the request
-    var fileStream = http.ByteStream(imageFile.openRead());
-    var length = await imageFile.length();
-    var multipartFile = http.MultipartFile(
-      'file',
-      fileStream,
-      length,
-      filename: imageFile.path.split('/').last,
-    );
-    request.files.add(multipartFile);
+      // Attach the image file to the request
+      var fileStream = http.ByteStream(imageFile.openRead());
+      var length = await imageFile.length();
+      var multipartFile = http.MultipartFile(
+        'file',
+        fileStream,
+        length,
+        filename: imageFile.path.split('/').last,
+      );
+      request.files.add(multipartFile);
 
-    // Send the request
-    var response = await request.send();
+      // Send the request
+      var response = await request.send();
 
-    // Handle response
-    if (response.statusCode == 200) {
-      // Successful API call
-      final respStr = await response.stream.bytesToString();
-      final jsonResponse = json.decode(respStr);
-      final description = jsonResponse['iSee']; // Extracting the iSee value
-      print('Image successfully sent to API.');
-      print('API Response: $description');
-
-      // Speak the description
-      if(lang != 'uz'){
-        await _speakDescription(description, lang);
-      }else{
-        _convertTextToAudio("aysii"+description);
+      // Handle response
+      if (response.statusCode == 200) {
+        // Successful API call
+        final respStr = await response.stream.bytesToString();
+        final jsonResponse = json.decode(respStr);
+        final description = jsonResponse['iSee']; // Extracting the iSee value
+        print('Image successfully sent to API.');
+        print('API Response: $description');
+        
+        if(lang != 'uz'){
+          _speakDescription(description, lang);
+        }else{
+          _convertTextToAudio(description);
+        }
+        return description;
+      } else {
+        // Error in API call
+        print('Failed to send image to API. Status code: ${response.statusCode}');
+        final errorResponse = await response.stream.bytesToString();
+        print('Error response: $errorResponse');
+        return '';
       }
-    } else {
-      // Error in API call
-      print(
-          'Failed to send image to API. Status code: ${response.statusCode}');
-      final errorResponse = await response.stream.bytesToString();
-      print('Error response: $errorResponse');
+    } catch (e) {
+      // Catch any exceptions
+      print('Error: $e');
+      return '';
     }
+  }
+
+  Future<void> _speakDescription(String description, String lang) async {
+  try {
+    // Set language for TTS
+    await flutterTts.setLanguage(lang);
+
+    // Speak the description
+    await flutterTts.speak(description);
   } catch (e) {
-    // Catch any exceptions
-    print('Error: $e');
+    print('Error in TTS: $e');
   }
 }
 
-  Future<void> _speakDescription(String description, String lang) async {
-    try {
-      // Set language for TTS
-      await flutterTts.setLanguage(lang);
-
-      // Speak the description
-      await flutterTts.speak(lang=='en'?"i see":"айсии" + description);
-      // Convert text to audio in Uzbek language
-    } catch (e) {
-      print('Error in TTS: $e');
-    }
-  }
-
-  final AudioPlayer _audioPlayer = AudioPlayer();
-  Future<void> _convertTextToAudio(String text) async {
+final AudioPlayer _audioPlayer = AudioPlayer();
+ Future<void> _convertTextToAudio(String text) async {
     var url = "https://mohir.ai/api/v1/tts";
     var headers = {
-      "Authorization": "6bdcaf97-b043-42da-a989-895154595a4c:437ccdbd-4cc6-4cf9-b4e6-0fc7274e30e3",
+      "Authorization":
+          "6bdcaf97-b043-42da-a989-895154595a4c:437ccdbd-4cc6-4cf9-b4e6-0fc7274e30e3",
       "Content-Type": "application/json",
     };
 
@@ -229,20 +236,22 @@ class _TakePhotoScreenState extends State<TakePhotoScreen> {
     });
 
     try {
-      var response = await http.post(Uri.parse(url), headers: headers, body: data);
+      var response =
+          await http.post(Uri.parse(url), headers: headers, body: data);
       if (response.statusCode == 200) {
         print('Text converted to audio successfully.');
-        // Assuming the API returns a direct link to the audio file
         var jsonResponse = json.decode(response.body);
-        var audioUrl = jsonResponse['result']['url']; // Replace 'audioUrl' with the actual key
+        var audioUrl = jsonResponse['result']['url'];
         await _audioPlayer.play(UrlSource(audioUrl));
       } else {
-        print('Failed to convert text to audio. Status code: ${response.statusCode}');
+        print(
+            'Failed to convert text to audio. Status code: ${response.statusCode}');
       }
     } catch (e) {
       print('Error converting text to audio: $e');
     }
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -346,7 +355,7 @@ class _TakePhotoScreenState extends State<TakePhotoScreen> {
           label: label, // Accessibility label
           child: Text(
             langCode.toUpperCase(),
-            style: TextStyle(
+             style: TextStyle(
               fontWeight: FontWeight.bold,
               fontSize: 30,
               color:
@@ -361,29 +370,92 @@ class _TakePhotoScreenState extends State<TakePhotoScreen> {
 
 class DisplayImageScreen extends StatefulWidget {
   final File imageFile;
-  final String description;
+  final String imageDescription;
 
-  const DisplayImageScreen({Key? key, required this.imageFile})
+  DisplayImageScreen({Key? key, required this.imageFile, required this.imageDescription})
       : super(key: key);
 
   @override
   _DisplayImageScreenState createState() => _DisplayImageScreenState();
 }
 
+Future<void> deleteImage(String imageUri) async {
+  final String baseUrl = "http://44.204.66.45"; // Use your actual base URL
+
+  try {
+    // Ensure the imageUri is properly encoded
+    var encodedUri = Uri.encodeFull('$baseUrl/delete_image?photo=$imageUri');
+    final response = await http.delete(Uri.parse(encodedUri));
+
+    if (response.statusCode == 200) {
+      // Successful deletion
+      print('Image deleted successfully');
+    } else {
+      // Log different status codes or handle them as needed
+      print('Deletion failed with status code: ${response.statusCode}');
+      print('Response body: ${response.body}');
+    }
+  } catch (error) {
+    // Handle specific exceptions if necessary
+    print('Error while deleting image: $error');
+    // Consider whether to re-throw the error depending on your error handling strategy
+  }
+}
+
 class _DisplayImageScreenState extends State<DisplayImageScreen> {
-  final TextEditingController _textEditingController = TextEditingController();
-  final List<Message> messages = [];
-  bool _isTyping = false;
-  final AudioPlayer audioPlayer = AudioPlayer();
+  late TextEditingController _textEditingController;
+  late List<Message> messages;
+  late bool _isTyping;
+  late AudioPlayer audioPlayer;
+  final speechToText = SpeechToText();
+  String _lastWords = '';
+
+
 
   @override
   void initState() {
     super.initState();
-    messages.add(Message(text: widget.description, isOutgoing: false));
+    initSpeechToText();
+    _textEditingController = TextEditingController();
+    messages = [];
+    _isTyping = false;
+    audioPlayer = AudioPlayer();
+    messages.add(Message(text: widget.imageDescription, isOutgoing: false));
     _textEditingController.addListener(() {
       setState(() {
         _isTyping = _textEditingController.text.isNotEmpty;
       });
+    });
+  }
+
+  Future<void> initSpeechToText()async{
+    await speechToText.initialize();
+    setState(() {
+      
+    });
+  }
+
+  void startListening() async {
+    await speechToText.listen(onResult: onSpeechResult);
+    setState(() {});
+    print(_lastWords);
+  }
+
+  /// Manually stop the active speech recognition session
+  /// Note that there are also timeouts that each platform enforces
+  /// and the SpeechToText plugin supports setting timeouts on the
+  /// listen method.
+  void stopListening() async {
+    await speechToText.stop();
+    setState(() {});
+  }
+
+  /// This is the callback that the SpeechToText plugin calls when
+  /// the platform returns recognized words.
+  void onSpeechResult(SpeechRecognitionResult result) {
+    setState(() {
+      _lastWords = result.recognizedWords;
+      print(_lastWords);
     });
   }
 
@@ -392,27 +464,46 @@ class _DisplayImageScreenState extends State<DisplayImageScreen> {
     _textEditingController.dispose();
     audioPlayer.dispose();
     super.dispose();
+    speechToText.stop();
   }
 
   void _copyToClipboard(String text) {
     Clipboard.setData(ClipboardData(text: text));
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
       content: Text('Message copied to clipboard'),
     ));
+  }
+
+  Future<void> _stopSpeaking() async {
+    final FlutterTts flutterTts = FlutterTts();
+    await flutterTts.stop();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Color(0xFF0D1739), // Set the background color to blue
+      backgroundColor: Color(0xFF0D1739),
       appBar: AppBar(
-        title: Text('Display and Share Image'),
+        title: const Text('Display and Share Image'),
         actions: [
           IconButton(
-            icon: Icon(Icons.share),
-            onPressed: () => Share.shareFiles([widget.imageFile.path], text: 'Check out this image!'),
+            icon: const Icon(Icons.share),
+            onPressed: () => Share.shareFiles([widget.imageFile.path],
+                text: widget.imageDescription,)
           ),
         ],
+        leading: IconButton(
+          icon: const Icon(Icons.exit_to_app),
+          onPressed: () {
+            _stopSpeaking();
+            Navigator.pop(context);
+             deleteImage(widget.imageFile.path).then((response) {
+                      print('Image deleted successfully');
+                    }).catchError((error) {
+                      print('Error deleting image: $error');
+                    });
+          },
+        ),
       ),
       body: Column(
         children: [
@@ -429,16 +520,22 @@ class _DisplayImageScreenState extends State<DisplayImageScreen> {
               itemBuilder: (context, index) {
                 final message = messages[index];
                 return Align(
-                  alignment: message.isOutgoing ? Alignment.centerRight : Alignment.centerLeft,
+                  alignment: message.isOutgoing
+                      ? Alignment.centerRight
+                      : Alignment.centerLeft,
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Flexible(
                         child: Container(
-                          padding: EdgeInsets.symmetric(vertical: 10, horizontal: 15),
-                          margin: EdgeInsets.symmetric(vertical: 5, horizontal: 8),
+                          padding: const EdgeInsets.symmetric(
+                              vertical: 10, horizontal: 15),
+                          margin: const EdgeInsets.symmetric(
+                              vertical: 5, horizontal: 8),
                           decoration: BoxDecoration(
-                            color: message.isOutgoing ? Colors.lightBlueAccent : Colors.white,
+                            color: message.isOutgoing
+                                ? Colors.lightBlueAccent
+                                : Colors.white,
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Text(
@@ -447,7 +544,7 @@ class _DisplayImageScreenState extends State<DisplayImageScreen> {
                           ),
                         ),
                       ),
-                      if (!message.isOutgoing) // Copy icon for incoming messages
+                      if (!message.isOutgoing)
                         IconButton(
                           icon: Icon(Icons.copy, color: Colors.white),
                           onPressed: () => _copyToClipboard(message.text),
@@ -459,21 +556,27 @@ class _DisplayImageScreenState extends State<DisplayImageScreen> {
             ),
           ),
           Container(
-            padding: EdgeInsets.only(bottom: 8, left: 8, right: 8),
-            color: Color(0xFF1C2031), // Bottom container color
+            padding: const EdgeInsets.only(bottom: 8, left: 8, right: 8),
+            color: const Color(0xFF1C2031),
             child: Row(
               children: [
                 IconButton(
                   icon: Icon(Icons.camera_alt, color: Colors.white),
                   onPressed: () {
-                    // Placeholder for take picture functionality
+                    _stopSpeaking();
+                    Navigator.pop(context);
+                    deleteImage(widget.imageFile.path).then((response) {
+                      print('Image deleted successfully');
+                    }).catchError((error) {
+                      print('Error deleting image: $error');
+                    });
                   },
                 ),
                 Expanded(
                   child: Container(
                     padding: EdgeInsets.symmetric(horizontal: 12),
                     decoration: BoxDecoration(
-                      color: Color(0xFF262A34), // Input field color
+                      color: Color(0xFF1C2031),
                       borderRadius: BorderRadius.circular(30),
                     ),
                     child: TextField(
@@ -486,17 +589,29 @@ class _DisplayImageScreenState extends State<DisplayImageScreen> {
                       ),
                     ),
                   ),
-                ),
-                IconButton(
-                  icon: Icon(_isTyping ? Icons.send : Icons.keyboard_voice, color: Colors.white),
-                  onPressed: _isTyping ? () {
-                    setState(() {
-                      messages.add(Message(text: _textEditingController.text, isOutgoing: true));
-                      _textEditingController.clear();
-                    });
-                  } : () {
-                    // Placeholder for voice message functionality
-                  },
+                ), 
+                IconButton( 
+                  icon: Icon(_isTyping ? Icons.send : Icons.keyboard_voice,
+                      color: speechToText.isListening?Colors.red:Colors.white),
+                  onPressed: _isTyping
+                      ? ()async {
+                          setState(()async {
+                            messages.add(Message(
+                                text: _textEditingController.text,
+                                isOutgoing: true));
+                            _textEditingController.clear();
+                          });
+                        }
+                      : () async{
+                          if(await speechToText.hasPermission && speechToText.isNotListening){
+                            startListening();
+                            print(_lastWords);
+                          }else if(speechToText.isListening){
+                            stopListening();
+                          }else{
+                            initSpeechToText();
+                          }
+                        },
                 ),
               ],
             ),
@@ -512,5 +627,3 @@ class Message {
   bool isOutgoing;
   Message({required this.text, required this.isOutgoing});
 }
-
-
