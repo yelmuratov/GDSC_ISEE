@@ -12,7 +12,6 @@ import 'package:share/share.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'package:audioplayers/audioplayers.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:speech_to_text/speech_to_text.dart';
@@ -26,12 +25,17 @@ void main() async {
   runApp(MyApp(cameras: cameras, defaultLang: defaultLang));
 }
 
+ class dataModel {
+  String photo;
+  String lang;
+  dataModel({required this.photo, required this.lang});
+}
+
 class MyApp extends StatelessWidget {
   final List<CameraDescription> cameras;
   final String defaultLang;
 
-  const MyApp({Key? key, required this.cameras, required this.defaultLang})
-      : super(key: key);
+  const MyApp({super.key, required this.cameras, required this.defaultLang});
 
   @override
   Widget build(BuildContext context) {
@@ -39,7 +43,7 @@ class MyApp extends StatelessWidget {
       future: _initLocalization(), // Initialize localization
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return CircularProgressIndicator();
+          return const CircularProgressIndicator();
         } else {
           return MaterialApp(
             title: 'Take Photo App',
@@ -48,12 +52,12 @@ class MyApp extends StatelessWidget {
             ),
             debugShowCheckedModeBanner: false,
             locale: Locale(defaultLang),
-            supportedLocales: [
+            supportedLocales: const [
               Locale('en'),
               Locale('ru'),
               Locale('uz'),
             ],
-            localizationsDelegates: [
+            localizationsDelegates: const [
               GlobalMaterialLocalizations.delegate,
               GlobalWidgetsLocalizations.delegate,
             ],
@@ -85,7 +89,6 @@ class _TakePhotoScreenState extends State<TakePhotoScreen> {
   late CameraController _cameraController;
   File? _imageFile;
   final FlutterTts flutterTts = FlutterTts();
-  final ImagePicker _picker = ImagePicker();
   bool _isCameraReady = false;
   bool _isSendingImage = false;
   String _selectedLanguage = 'en'; // Default selected language is English
@@ -137,7 +140,8 @@ class _TakePhotoScreenState extends State<TakePhotoScreen> {
 
       // Send the image to the API if it's not null
       if (_imageFile != null) {
-        final description = await _sendImageToAPI(_imageFile!, _selectedLanguage);
+        final description =
+            await _sendImageToAPI(_imageFile!, _selectedLanguage);
 
         // Navigate to the new page to display the taken image with the description
         Navigator.push(
@@ -160,7 +164,8 @@ class _TakePhotoScreenState extends State<TakePhotoScreen> {
 
   Future<String> _sendImageToAPI(File imageFile, String lang) async {
     try {
-      var uri = Uri.parse('http://44.204.66.45/generate_image_description/?lang=$lang');
+      var uri = Uri.parse(
+          'http://44.204.66.45/generate_image_description/?lang=$lang');
       var request = http.MultipartRequest('POST', uri);
 
       // Attach the image file to the request
@@ -185,16 +190,17 @@ class _TakePhotoScreenState extends State<TakePhotoScreen> {
         final description = jsonResponse['iSee']; // Extracting the iSee value
         print('Image successfully sent to API.');
         print('API Response: $description');
-        
-        if(lang != 'uz'){
+
+        if (lang != 'uz') {
           _speakDescription(description, lang);
-        }else{
+        } else {
           _convertTextToAudio(description);
         }
         return description;
       } else {
         // Error in API call
-        print('Failed to send image to API. Status code: ${response.statusCode}');
+        print(
+            'Failed to send image to API. Status code: ${response.statusCode}');
         final errorResponse = await response.stream.bytesToString();
         print('Error response: $errorResponse');
         return '';
@@ -207,23 +213,23 @@ class _TakePhotoScreenState extends State<TakePhotoScreen> {
   }
 
   Future<void> _speakDescription(String description, String lang) async {
-  try {
-    // Set language for TTS
-    await flutterTts.setLanguage(lang);
+    try {
+      // Set language for TTS
+      await flutterTts.setLanguage(lang);
 
-    // Speak the description
-    await flutterTts.speak(description);
-  } catch (e) {
-    print('Error in TTS: $e');
+      // Speak the description
+      await flutterTts.speak(description);
+    } catch (e) {
+      print('Error in TTS: $e');
+    }
   }
-}
 
-final AudioPlayer _audioPlayer = AudioPlayer();
- Future<void> _convertTextToAudio(String text) async {
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  Future<void> _convertTextToAudio(String text) async {
     var url = "https://mohir.ai/api/v1/tts";
     var headers = {
       "Authorization":
-          "6bdcaf97-b043-42da-a989-895154595a4c:437ccdbd-4cc6-4cf9-b4e6-0fc7274e30e3",
+          "d6551223-d914-4488-ad8c-050268b8d535:1fc2f5fb-5635-45ed-a43f-dfe1091bd43a",
       "Content-Type": "application/json",
     };
 
@@ -251,7 +257,6 @@ final AudioPlayer _audioPlayer = AudioPlayer();
       print('Error converting text to audio: $e');
     }
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -355,7 +360,7 @@ final AudioPlayer _audioPlayer = AudioPlayer();
           label: label, // Accessibility label
           child: Text(
             langCode.toUpperCase(),
-             style: TextStyle(
+            style: TextStyle(
               fontWeight: FontWeight.bold,
               fontSize: 30,
               color:
@@ -372,7 +377,8 @@ class DisplayImageScreen extends StatefulWidget {
   final File imageFile;
   final String imageDescription;
 
-  DisplayImageScreen({Key? key, required this.imageFile, required this.imageDescription})
+  DisplayImageScreen(
+      {Key? key, required this.imageFile, required this.imageDescription})
       : super(key: key);
 
   @override
@@ -410,8 +416,6 @@ class _DisplayImageScreenState extends State<DisplayImageScreen> {
   final speechToText = SpeechToText();
   String _lastWords = '';
 
-
-
   @override
   void initState() {
     super.initState();
@@ -428,11 +432,14 @@ class _DisplayImageScreenState extends State<DisplayImageScreen> {
     });
   }
 
-  Future<void> initSpeechToText()async{
-    await speechToText.initialize();
-    setState(() {
-      
-    });
+  Future<void> initSpeechToText() async {
+    bool available = await speechToText.initialize();
+    if (!available) {
+      // Handle the case where Speech to Text is not available or initialization failed
+      print('Speech to Text not available or initialization failed');
+    }
+
+    setState(() {});
   }
 
   void startListening() async {
@@ -441,10 +448,6 @@ class _DisplayImageScreenState extends State<DisplayImageScreen> {
     print(_lastWords);
   }
 
-  /// Manually stop the active speech recognition session
-  /// Note that there are also timeouts that each platform enforces
-  /// and the SpeechToText plugin supports setting timeouts on the
-  /// listen method.
   void stopListening() async {
     await speechToText.stop();
     setState(() {});
@@ -486,23 +489,31 @@ class _DisplayImageScreenState extends State<DisplayImageScreen> {
       appBar: AppBar(
         title: const Text('Display and Share Image'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.share),
-            onPressed: () => Share.shareFiles([widget.imageFile.path],
-                text: widget.imageDescription,)
+          Semantics(
+            label: 'Share', // Accessibility label
+            child: IconButton(
+              icon: const Icon(Icons.share),
+              onPressed: () => Share.shareFiles(
+                [widget.imageFile.path],
+                text: widget.imageDescription,
+              ),
+            ),
           ),
         ],
-        leading: IconButton(
-          icon: const Icon(Icons.exit_to_app),
-          onPressed: () {
-            _stopSpeaking();
-            Navigator.pop(context);
-             deleteImage(widget.imageFile.path).then((response) {
-                      print('Image deleted successfully');
-                    }).catchError((error) {
-                      print('Error deleting image: $error');
-                    });
-          },
+        leading: Semantics(
+          label: 'Exit', // Accessibility label
+          child: IconButton(
+            icon: const Icon(Icons.exit_to_app),
+            onPressed: () {
+              _stopSpeaking();
+              Navigator.pop(context);
+              deleteImage(widget.imageFile.path).then((response) {
+                print('Image deleted successfully');
+              }).catchError((error) {
+                print('Error deleting image: $error');
+              });
+            },
+          ),
         ),
       ),
       body: Column(
@@ -561,7 +572,7 @@ class _DisplayImageScreenState extends State<DisplayImageScreen> {
             child: Row(
               children: [
                 IconButton(
-                  icon: Icon(Icons.camera_alt, color: Colors.white),
+                  icon: const Icon(Icons.camera_alt, color: Colors.white),
                   onPressed: () {
                     _stopSpeaking();
                     Navigator.pop(context);
@@ -574,41 +585,43 @@ class _DisplayImageScreenState extends State<DisplayImageScreen> {
                 ),
                 Expanded(
                   child: Container(
-                    padding: EdgeInsets.symmetric(horizontal: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
                     decoration: BoxDecoration(
-                      color: Color(0xFF1C2031),
+                      color: const Color(0xFF1C2031),
                       borderRadius: BorderRadius.circular(30),
                     ),
                     child: TextField(
                       controller: _textEditingController,
-                      style: TextStyle(color: Colors.white),
-                      decoration: InputDecoration(
+                      style: const TextStyle(color: Colors.white),
+                      decoration: const InputDecoration(
                         hintText: 'Type your message here...',
                         hintStyle: TextStyle(color: Colors.white54),
                         border: InputBorder.none,
                       ),
                     ),
                   ),
-                ), 
-                IconButton( 
+                ),
+                IconButton(
                   icon: Icon(_isTyping ? Icons.send : Icons.keyboard_voice,
-                      color: speechToText.isListening?Colors.red:Colors.white),
+                      color:
+                          speechToText.isListening ? Colors.red : Colors.white),
                   onPressed: _isTyping
-                      ? ()async {
-                          setState(()async {
+                      ? () async {
+                          setState(() {
                             messages.add(Message(
                                 text: _textEditingController.text,
                                 isOutgoing: true));
                             _textEditingController.clear();
                           });
                         }
-                      : () async{
-                          if(await speechToText.hasPermission && speechToText.isNotListening){
+                      : () async {
+                          if (await speechToText.hasPermission &&
+                              speechToText.isNotListening) {
                             startListening();
                             print(_lastWords);
-                          }else if(speechToText.isListening){
+                          } else if (speechToText.isListening) {
                             stopListening();
-                          }else{
+                          } else {
                             initSpeechToText();
                           }
                         },
